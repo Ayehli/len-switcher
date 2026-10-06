@@ -1,8 +1,8 @@
 # len-switcher
 
-Windows helper for when you type a whole field in the wrong keyboard layout (Hebrew vs English). Press a shortcut: it selects the current text field, remaps the letters as if the other layout had been on, pastes the result, and switches Windows to that language.
+Windows helper for when you type a whole field in the wrong keyboard layout. Press a shortcut: it selects the current text field, remaps the letters as if the other layout had been on, pastes the result, and switches Windows to that language.
 
-Plain copy → switch layout → paste does not fix this. Paste keeps the same letters. This script remaps by physical key (Windows Hebrew vs US QWERTY).
+Plain copy → switch layout → paste does not fix this. Paste keeps the same letters. This script remaps by physical key between the two layouts you choose in Settings.
 
 ## Install (recommended)
 
@@ -23,27 +23,23 @@ If you already have AutoHotkey v2 installed, you can double-click `len-switcher.
 ## Use
 
 1. Click in a text field (Notepad, a browser input, Word, WhatsApp Desktop, and similar).
-2. Press **Ctrl+Shift+L**.
-3. The field contents convert in place:
-   - Mostly Hebrew letters → English, then switch to **English (US)**.
-   - Otherwise → Hebrew, then switch to **Hebrew**.
+2. Press the convert hotkey (default **Ctrl+Shift+L**).
+3. The field contents convert in place between your two configured layouts, then Windows switches to the target layout.
 
-It will not be reliable in terminals, games, or when focus is not in a text field (Ctrl+A may select a whole web page).
+It will not be reliable in terminals, games, or when focus is not in a text field (Ctrl+A may select a whole web page). Complex IME layouts (e.g. CJK) are not supported.
 
-## Change the hotkey
+## Settings
 
-At the top of `len-switcher.ahk`:
+Right-click the tray icon → **Settings** (ASCII-style window):
 
-```ahk
-ConvertHotkey := "^+l"
-```
+1. **Hotkey** — click **Set Hotkey**, then press the combo you want (Esc cancels).
+2. **Language pair** — pick any two installed keyboard layouts. Mistyped text is remapped between those layouts.
 
-- `^` Ctrl
-- `+` Shift
-- `!` Alt
-- `#` Win
+Settings are saved to:
 
-Example: `ConvertHotkey := "^!q"` is Ctrl+Alt+Q. Save the file; if the script is already running, reload it from the tray icon. Rebuild `LenSwitcher.exe` with `build-exe.ps1` if you use the exe.
+`%LocalAppData%\LenSwitcher\settings.ini`
+
+Changing the script or rebuilding the exe does not wipe this file.
 
 ## Run at login
 
