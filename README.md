@@ -2,7 +2,7 @@
 
 Windows helper for when you type a whole field in the wrong keyboard layout. Press a shortcut: it selects the current text field, remaps the letters as if the other layout had been on, pastes the result, and switches Windows to that language.
 
-Plain copy → switch layout → paste does not fix this. Paste keeps the same letters. This script remaps by physical key between the two layouts you choose in Settings.
+Plain copy → switch layout → paste does not fix this. Paste keeps the same letters. This script remaps by physical key between English (US) and Hebrew by default.
 
 ## Install (recommended)
 
@@ -24,7 +24,7 @@ If you already have AutoHotkey v2 installed, you can double-click `len-switcher.
 
 1. Click in a text field (Notepad, a browser input, Word, WhatsApp Desktop, and similar).
 2. Press the convert hotkey (default **Ctrl+Shift+L**).
-3. The field contents convert in place between your two configured layouts, then Windows switches to the target layout.
+3. The field contents convert in place between English (US) and Hebrew, then Windows switches to the target layout.
 
 It will not be reliable in terminals, games, or when focus is not in a text field (Ctrl+A may select a whole web page). Complex IME layouts (e.g. CJK) are not supported.
 
@@ -33,7 +33,8 @@ It will not be reliable in terminals, games, or when focus is not in a text fiel
 Right-click the tray icon → **Settings** (ASCII-style window):
 
 1. **Hotkey** — click **Set Hotkey**, then press the combo you want (Esc cancels).
-2. **Language pair** — pick any two installed keyboard layouts. Mistyped text is remapped between those layouts.
+
+Remapping uses English (US) ↔ Hebrew by default. To change the pair, edit `LayoutA` / `LayoutB` in the settings file (Windows keyboard layout IDs).
 
 Settings are saved to:
 

@@ -17,9 +17,6 @@ savedClip := unset
 settingsGui := 0
 captureIh := 0
 pendingHotkey := ""
-layoutList := []
-selectedKlidA := ""
-selectedKlidB := ""
 captureCtrl := false
 captureShift := false
 captureAlt := false
@@ -67,115 +64,6 @@ SaveSettings() {
     IniWrite(ConvertHotkey, SETTINGS_PATH, "Settings", "Hotkey")
     IniWrite(LayoutA, SETTINGS_PATH, "Settings", "LayoutA")
     IniWrite(LayoutB, SETTINGS_PATH, "Settings", "LayoutB")
-}
-
-; --- Installed layouts ------------------------------------------------------
-
-GetInstalledLayouts() {
-    layouts := []
-    seen := Map()
-
-    ; User-installed input languages (does not change the active layout).
-    loop {
-        try
-            entry := RegRead("HKEY_CURRENT_USER\Keyboard Layout\Preload", String(A_Index))
-        catch
-            break
-        if entry = ""
-            break
-        klid := ResolveLayoutKlid(entry)
-        if klid = "" || seen.Has(klid)
-            continue
-        seen[klid] := true
-        layouts.Push(MakeLayoutEntry(klid))
-    }
-
-    ; Also include layouts currently loaded in the session.
-    count := DllCall("GetKeyboardLayoutList", "Int", 0, "Ptr", 0)
-    if count > 0 {
-        buf := Buffer(count * A_PtrSize)
-        count := DllCall("GetKeyboardLayoutList", "Int", count, "Ptr", buf.Ptr)
-        loop count {
-            hkl := NumGet(buf, (A_Index - 1) * A_PtrSize, "UPtr")
-            klid := Format("{:08X}", hkl & 0xFFFFFFFF)
-            ; Prefer language-form KLID when high/low words match (e.g. 04090409 -> 00000409).
-            lang := Format("{:04X}", hkl & 0xFFFF)
-            device := Format("{:04X}", (hkl >> 16) & 0xFFFF)
-            if device = lang || device = "0000"
-                klid := "0000" lang
-            if seen.Has(klid)
-                continue
-            seen[klid] := true
-            layouts.Push(MakeLayoutEntry(klid, hkl))
-        }
-    }
-
-    loop layouts.Length {
-        i := A_Index
-        loop layouts.Length - i {
-            j := i + A_Index
-            if StrCompare(layouts[j].name, layouts[i].name, "Locale") < 0 {
-                tmp := layouts[i]
-                layouts[i] := layouts[j]
-                layouts[j] := tmp
-            }
-        }
-    }
-    return layouts
-}
-
-ResolveLayoutKlid(entry) {
-    klid := entry
-    try
-        klid := RegRead("HKEY_CURRENT_USER\Keyboard Layout\Substitutes", entry)
-    catch {
-        ; Preload entry is already a KLID.
-    }
-    return StrUpper(klid)
-}
-
-MakeLayoutEntry(klid, hkl := 0) {
-    if !hkl
-        hkl := DllCall("LoadKeyboardLayout", "Str", klid, "UInt", 0, "UPtr")
-    return {
-        klid: StrUpper(klid),
-        hkl: hkl,
-        name: LayoutDisplayName(klid)
-    }
-}
-
-LayoutDisplayName(klid) {
-    langHex := SubStr(klid, -4)
-    try
-        langId := Integer("0x" langHex)
-    catch
-        langId := 0
-    localeName := Buffer(512)
-    if langId && DllCall("GetLocaleInfoW", "UInt", langId, "UInt", 0x2, "Ptr", localeName.Ptr, "Int", 256)
-        label := StrGet(localeName, "UTF-16")
-    else
-        label := "Layout"
-    return label " [" StrUpper(klid) "]"
-}
-
-FindLayoutIndex(layouts, klid) {
-    klid := StrUpper(klid)
-    loop layouts.Length {
-        if layouts[A_Index].klid = klid
-            return A_Index
-    }
-    return 0
-}
-
-EnsureLayoutInList(layouts, klid) {
-    klid := StrUpper(klid)
-    if FindLayoutIndex(layouts, klid)
-        return layouts
-    hkl := DllCall("LoadKeyboardLayout", "Str", klid, "UInt", 0, "UPtr")
-    if !hkl
-        return layouts
-    layouts.Push(MakeLayoutEntry(klid, hkl))
-    return layouts
 }
 
 ; --- Dynamic remap maps -----------------------------------------------------
@@ -404,33 +292,13 @@ RestoreClipboard(*) {
 ; --- Settings GUI -----------------------------------------------------------
 
 OpenSettings(*) {
-    global settingsGui, ConvertHotkey, LayoutA, LayoutB, pendingHotkey, layoutList, selectedKlidA, selectedKlidB
+    global settingsGui, ConvertHotkey, pendingHotkey
     if settingsGui {
         settingsGui.Show()
         return
     }
 
-    layoutList := GetInstalledLayouts()
-    layoutList := EnsureLayoutInList(layoutList, LayoutA)
-    layoutList := EnsureLayoutInList(layoutList, LayoutB)
-    if layoutList.Length < 2 {
-        MsgBox("Need at least two keyboard layouts installed in Windows.", "len-switcher", "Icon!")
-        return
-    }
-
     pendingHotkey := ConvertHotkey
-    names := []
-    for item in layoutList
-        names.Push(item.name)
-
-    idxA := FindLayoutIndex(layoutList, LayoutA)
-    idxB := FindLayoutIndex(layoutList, LayoutB)
-    if !idxA
-        idxA := 1
-    if !idxB
-        idxB := idxA = 1 && layoutList.Length > 1 ? 2 : 1
-    selectedKlidA := layoutList[idxA].klid
-    selectedKlidB := layoutList[idxB].klid
 
     g := Gui("+AlwaysOnTop -MinimizeBox", "len-switcher :: settings")
     g.BackColor := "0x0d1117"
@@ -450,21 +318,6 @@ OpenSettings(*) {
     btnCapture := g.AddButton("x+8 yp-4 w120 h24", "Set Hotkey")
     btnCapture.OnEvent("Click", StartHotkeyCapture)
 
-    g.SetFont("s9 c0x8b949e", "Consolas")
-    g.AddText("xm y+14 w420", "Language pair (from installed layouts)")
-    g.SetFont("s9 c0x3fb950", "Consolas")
-    g.AddText("xm w40", "From")
-    ddlA := g.AddDropDownList("x+8 yp-3 w360 vLayoutAChoice", names)
-    ddlA.Choose(idxA)
-    ddlA.OnEvent("Change", LayoutAChanged)
-    g.AddText("xm w40", "To")
-    ddlB := g.AddDropDownList("x+8 yp-3 w360 vLayoutBChoice", names)
-    ddlB.Choose(idxB)
-    ddlB.OnEvent("Change", LayoutBChanged)
-
-    g.SetFont("s9 c0x8b949e", "Consolas")
-    g.AddText("xm y+14 w420", "Tip: mistyped text remaps by physical key between these two.")
-
     g.SetFont("s9 c0x0d1117", "Consolas")
     btnSave := g.AddButton("xm y+12 w100 h28 Default", "Save")
     btnCancel := g.AddButton("x+10 yp w100 h28", "Cancel")
@@ -475,28 +328,6 @@ OpenSettings(*) {
 
     settingsGui := g
     g.Show()
-}
-
-LayoutAChanged(ctrl, *) {
-    global layoutList, selectedKlidA
-    idx := DropDownIndex(ctrl)
-    if idx >= 1 && idx <= layoutList.Length
-        selectedKlidA := layoutList[idx].klid
-}
-
-LayoutBChanged(ctrl, *) {
-    global layoutList, selectedKlidB
-    idx := DropDownIndex(ctrl)
-    if idx >= 1 && idx <= layoutList.Length
-        selectedKlidB := layoutList[idx].klid
-}
-
-; CB_GETCURSEL — reliable even if Alt clears the displayed text during hotkey capture.
-DropDownIndex(ctrl) {
-    sel := SendMessage(0x147, 0, 0, ctrl) ; CB_GETCURSEL
-    if sel < 0
-        return 0
-    return sel + 1
 }
 
 CloseSettings(*) {
@@ -517,7 +348,6 @@ StartHotkeyCapture(*) {
     captureShift := false
     captureAlt := false
     captureWin := false
-    ; Move focus off dropdowns so Alt during capture cannot clear their selection.
     try settingsGui["HotkeyDisplay"].Focus()
     settingsGui["HotkeyDisplay"].Value := "Press combo... (Esc cancel)"
     captureIh := InputHook("L0 T60", "{Escape}")
@@ -637,37 +467,16 @@ NormalizeHotkeyKey(name) {
 }
 
 SaveSettingsFromGui(*) {
-    global settingsGui, layoutList, pendingHotkey, ConvertHotkey, LayoutA, LayoutB, A_TO_B, B_TO_A, selectedKlidA, selectedKlidB
+    global settingsGui, pendingHotkey, ConvertHotkey
     if !settingsGui
         return
 
-    ; Prefer tracked KLIDs (survives Alt clearing dropdown text during capture).
-    SyncSelectedLayoutsFromGui()
-    klidA := selectedKlidA
-    klidB := selectedKlidB
-    if klidA = "" || klidB = "" {
-        MsgBox("Invalid layout selection.", "len-switcher", "Icon!")
-        return
-    }
     if pendingHotkey = ""
         pendingHotkey := ConvertHotkey
 
-    ; Snapshot so a failed hotkey bind does not leave half-applied settings.
     prevHotkey := ConvertHotkey
-    prevA := LayoutA
-    prevB := LayoutB
-    prevAToB := A_TO_B
-    prevBToA := B_TO_A
-
-    if !ApplyLayoutPair(klidA, klidB, true) {
-        return
-    }
     if !BindConvertHotkey(pendingHotkey) {
         ConvertHotkey := prevHotkey
-        LayoutA := prevA
-        LayoutB := prevB
-        A_TO_B := prevAToB
-        B_TO_A := prevBToA
         try Hotkey(ConvertHotkey, ConvertCurrentField, "On")
         MsgBox("Could not register hotkey: " HotkeyToDisplay(pendingHotkey) "`nPick a different combo.", "len-switcher", "Icon!")
         return
@@ -675,17 +484,4 @@ SaveSettingsFromGui(*) {
 
     SaveSettings()
     CloseSettings()
-}
-
-SyncSelectedLayoutsFromGui() {
-    global settingsGui, layoutList, selectedKlidA, selectedKlidB
-    if !settingsGui
-        return
-    idxA := DropDownIndex(settingsGui["LayoutAChoice"])
-    idxB := DropDownIndex(settingsGui["LayoutBChoice"])
-    if idxA >= 1 && idxA <= layoutList.Length
-        selectedKlidA := layoutList[idxA].klid
-    if idxB >= 1 && idxB <= layoutList.Length
-        selectedKlidB := layoutList[idxB].klid
-    ; If CB_GETCURSEL failed (e.g. Alt wiped selection), keep prior selectedKlid* values.
 }
